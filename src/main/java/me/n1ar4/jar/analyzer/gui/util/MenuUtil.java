@@ -1,3 +1,27 @@
+/*
+ * MIT License
+ *
+ * Copyright (c) 2023-2024 4ra1n (Jar Analyzer Team)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package me.n1ar4.jar.analyzer.gui.util;
 
 import com.github.rjeschke.txtmark.Processor;
@@ -32,6 +56,10 @@ public class MenuUtil {
     private static final JCheckBoxMenuItem logAllSqlConfig = new JCheckBoxMenuItem("save all sql statement");
     private static final JCheckBoxMenuItem chineseConfig = new JCheckBoxMenuItem("Chinese");
     private static final JCheckBoxMenuItem englishConfig = new JCheckBoxMenuItem("English");
+    private static final JCheckBoxMenuItem enableFixMethodImplConfig = new JCheckBoxMenuItem(
+            "enable fix methods impl/override");
+    private static final JCheckBoxMenuItem disableFixMethodImplConfig = new JCheckBoxMenuItem(
+            "disable fix methods impl/override");
 
     public static void setLangFlag() {
         if (GlobalOptions.getLang() == GlobalOptions.CHINESE) {
@@ -47,6 +75,7 @@ public class MenuUtil {
         sortedByMethodConfig.setState(false);
         sortedByClassConfig.setState(true);
         logAllSqlConfig.setSelected(true);
+        enableFixMethodImplConfig.setSelected(true);
 
         chineseConfig.addActionListener(e -> {
             chineseConfig.setState(chineseConfig.getState());
@@ -95,6 +124,16 @@ public class MenuUtil {
             sortedByClassConfig.setState(sortedByClassConfig.getState());
             sortedByMethodConfig.setState(!sortedByClassConfig.getState());
         });
+
+        enableFixMethodImplConfig.addActionListener(e -> {
+            enableFixMethodImplConfig.setState(enableFixMethodImplConfig.getState());
+            disableFixMethodImplConfig.setState(!enableFixMethodImplConfig.getState());
+        });
+
+        disableFixMethodImplConfig.addActionListener(e -> {
+            disableFixMethodImplConfig.setState(disableFixMethodImplConfig.getState());
+            enableFixMethodImplConfig.setState(!disableFixMethodImplConfig.getState());
+        });
     }
 
     public static JCheckBoxMenuItem getShowInnerConfig() {
@@ -115,6 +154,14 @@ public class MenuUtil {
 
     public static boolean sortedByClass() {
         return sortedByClassConfig.getState();
+    }
+
+    public static boolean enableFixMethodImpl() {
+        return enableFixMethodImplConfig.getState();
+    }
+
+    public static boolean disableFixMethodImpl() {
+        return disableFixMethodImplConfig.getState();
     }
 
     public static JMenuBar createMenuBar() {
@@ -220,6 +267,8 @@ public class MenuUtil {
             configMenu.add(fixClassPathConfig);
             configMenu.add(sortedByMethodConfig);
             configMenu.add(sortedByClassConfig);
+            configMenu.add(enableFixMethodImplConfig);
+            configMenu.add(disableFixMethodImplConfig);
             configMenu.add(logAllSqlConfig);
             JMenuItem partitionConfig = new JMenuItem("partition config");
             partitionConfig.setIcon(IconManager.javaIcon);

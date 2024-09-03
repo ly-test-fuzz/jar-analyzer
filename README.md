@@ -178,6 +178,10 @@
 
 以上是基础功能，进阶和测试性的功能请参考：[进阶测试性功能](doc/README-advance.md)
 
+例如类似 `OD/GDB` 的指令级 `GUI` 调试（未完成）
+
+![](img/0035.png)
+
 ## 快捷键
 
 - `CTRL+X` 方法交叉引用 快速跳转方法 `caller` 和 `callee` 页面
@@ -218,6 +222,8 @@ set "theme_name=default"
 [文档](doc/README-sub.md)
 
 ## 其他
+
+解释一些内部的原理和注意事项
 
 [文档](doc/README-others.md)
 
