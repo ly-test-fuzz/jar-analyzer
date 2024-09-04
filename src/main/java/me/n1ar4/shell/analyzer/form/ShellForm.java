@@ -26,14 +26,9 @@ package me.n1ar4.shell.analyzer.form;
 
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
-import com.sun.tools.attach.VirtualMachine;
-import com.sun.tools.attach.VirtualMachineDescriptor;
+import com.intellij.uiDesigner.core.Spacer;
 import me.n1ar4.jar.analyzer.gui.MainForm;
-import me.n1ar4.jar.analyzer.starter.Version;
-import me.n1ar4.jar.analyzer.utils.OSUtil;
-import me.n1ar4.jar.analyzer.utils.SocketUtil;
 import me.n1ar4.shell.analyzer.model.ClassObj;
-import me.n1ar4.shell.analyzer.model.ProcessObj;
 import me.n1ar4.shell.analyzer.start.SocketHelper;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
@@ -43,7 +38,6 @@ import org.jetbrains.java.decompiler.main.decompiler.ConsoleDecompiler;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import javax.swing.plaf.FontUIResource;
-import javax.swing.table.DefaultTableModel;
 import javax.swing.text.StyleContext;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
@@ -55,9 +49,10 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.Random;
 
 public class ShellForm {
+    private static final String DEFAULT_PASSWD = "P4sSW0rD";
+
     class CommonMouse extends MouseAdapter {
         public void mouseClicked(MouseEvent evt) {
             JList<?> list = (JList<?>) evt.getSource();
@@ -71,8 +66,6 @@ public class ShellForm {
     private JPanel shellPanel;
     private JPanel rootPanel;
     private JPanel topPanel;
-    private JButton runningButton;
-    private JTextField pidText;
     private JButton attachButton;
     private JList<ClassObj> filterList;
     private JList<ClassObj> listenerList;
@@ -82,8 +75,6 @@ public class ShellForm {
     private JTextArea blackArea;
     private JCheckBox ignoreJavaBox;
     private JButton analyzeButton;
-    private JScrollPane processScroll;
-    private JLabel pidLabel;
     private JPanel filtersPane;
     private JPanel servletsPane;
     private JPanel listenerPane;
@@ -104,36 +95,19 @@ public class ShellForm {
     private JScrollPane listenerScroll;
     private JScrollPane valveScroll;
     private JList<ClassObj> valveList;
-    private JTable processTable;
     private JCheckBox ignoreSpringBox;
     private JLabel blackTip;
-    private JButton killButton;
-    private JTextField killText;
     private JButton refreshButton;
     private JTextField passText;
     private JLabel passLabel;
     private JButton genButton;
+    private JTextField targetIPText;
+    private JTextField targetPortText;
+    private JLabel targetIPLabel;
+    private JLabel targetPortLabel;
     private static final List<String> black = new ArrayList<>();
-    private static final String[] columns = new String[]{"PID", "Name"};
-    private static String[][] rows = new String[0][0];
-    private static final List<ClassObj> coList = new ArrayList<>();
-
-    private static DefaultTableModel model = new DefaultTableModel(rows, columns) {
-        public boolean isCellEditable(int row, int column) {
-            return false;
-        }
-    };
 
     private void analyze() {
-        String host = "127.0.0.1";
-        String pass = passText.getText();
-        if (pass.length() != 8) {
-            JOptionPane.showMessageDialog(shellPanel, "请输入密码");
-        }
-
-        SocketHelper.setHost(host);
-        SocketHelper.setPass(pass);
-
         DefaultListModel<ClassObj> filtersModel = new DefaultListModel<>();
         DefaultListModel<ClassObj> listenersModel = new DefaultListModel<>();
         DefaultListModel<ClassObj> servletsModel = new DefaultListModel<>();
@@ -186,7 +160,6 @@ public class ShellForm {
                 }
                 ClassObj co = new ClassObj(filter, "FILTER");
                 filtersModel.addElement(co);
-                coList.add(co);
             }
             filterList.setModel(filtersModel);
         } catch (Exception ex) {
@@ -225,7 +198,6 @@ public class ShellForm {
                 }
                 ClassObj co = new ClassObj(servlet, "SERVLET");
                 servletsModel.addElement(co);
-                coList.add(co);
             }
             servletList.setModel(servletsModel);
         } catch (Exception ex) {
@@ -264,7 +236,6 @@ public class ShellForm {
                 }
                 ClassObj co = new ClassObj(li, "LISTENER");
                 listenersModel.addElement(co);
-                coList.add(co);
             }
             listenerList.setModel(listenersModel);
         } catch (Exception ex) {
@@ -303,7 +274,6 @@ public class ShellForm {
                 }
                 ClassObj co = new ClassObj(v, "VALVE");
                 valvesModel.addElement(co);
-                coList.add(co);
             }
             valveList.setModel(valvesModel);
         } catch (Exception ex) {
@@ -320,218 +290,57 @@ public class ShellForm {
         codeArea.setCodeFoldingEnabled(true);
         RTextScrollPane sp = new RTextScrollPane(codeArea);
         codePanel.add(sp, new GridConstraints());
-        processTable.setModel(model);
-        processTable.getColumnModel().getColumn(0).setMaxWidth(100);
 
         genButton.addActionListener(e -> {
-            int length = 8;
-            String str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-            Random random = new Random();
-            random.setSeed(System.currentTimeMillis());
-            StringBuffer sb = new StringBuffer();
-            for (int i = 0; i < length; i++) {
-                int number = random.nextInt(62);
-                sb.append(str.charAt(number));
-            }
-            passText.setText(sb.toString());
+            String command = "java ... -javaagent:agent.jar=port=%s;password=%s ...";
+            command = String.format(command, targetPortText.getText(), passText.getText());
+            JTextArea textArea = new JTextArea(command);
+            textArea.setEditable(true);
+            textArea.setLineWrap(true);
+            textArea.setWrapStyleWord(true);
+            textArea.setSize(500, 50);
+            JOptionPane.showMessageDialog(codePanel,
+                    new JScrollPane(textArea), "GENERATE", JOptionPane.INFORMATION_MESSAGE);
         });
 
-        this.processTable.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent evt) {
-                int row = processTable.rowAtPoint(evt.getPoint());
-                if (row >= 0) {
-                    String pid = rows[row][0];
-                    pidText.setText(pid);
-                }
-            }
-        });
-
-        runningButton.addActionListener(e -> {
-            List<List<String>> dataList = new ArrayList<>();
-            List<VirtualMachineDescriptor> list = VirtualMachine.list();
-            for (VirtualMachineDescriptor v : list) {
-                ProcessObj p = new ProcessObj();
-                p.setId(v.id());
-
-                String t = v.displayName();
-                if (t == null || t.equals("")) {
-                    continue;
-                }
-
-                if (!t.toLowerCase().endsWith(".jar")) {
-                    String[] s = t.split("\\.");
-                    t = s[s.length - 1];
-
-                    if (t.contains("/")) {
-                        s = t.split("/");
-                        t = s[s.length - 1];
-                    }
-                }
-
-                p.setName(t);
-                List<String> temp = new ArrayList<>();
-                temp.add(p.getId());
-                temp.add(p.getName());
-                dataList.add(temp);
-            }
-            String[][] z = new String[dataList.size()][];
-            for (int i = 0; i < dataList.size(); i++) {
-                String[] a = dataList.get(i).toArray(new String[0]);
-                z[i] = a;
-            }
-
-            log("当前运行的Java进程数量: " + z.length);
-
-            rows = z;
-            model = new DefaultTableModel(rows, columns) {
-                public boolean isCellEditable(int row, int column) {
-                    return false;
-                }
-            };
-            processTable.setModel(model);
-            processTable.getColumnModel().getColumn(0).setMaxWidth(100);
-        });
         attachButton.addActionListener(e -> {
-            String pid = pidText.getText();
+            String host = targetIPText.getText();
+            String port = targetPortText.getText();
             String pass = passText.getText();
             if (pass.length() != 8) {
-                JOptionPane.showMessageDialog(shellPanel, "请输入长度为8的密码");
+                JOptionPane.showMessageDialog(shellPanel, "请输入长度为 8 的密码");
                 return;
             }
+
+            SocketHelper.setHost(host);
+            SocketHelper.setPort(port);
             SocketHelper.setPass(pass);
-            log("开始Attach到目标: " + pid);
-            try {
-                VirtualMachine vm = VirtualMachine.attach(pid);
-                log("正在加载Agent程序...");
 
-                Path agentPath = Paths.get("lib").resolve(
-                        Paths.get("agent.jar"));
-                Path agentDepPath = Paths.get("lib").resolve(
-                        Paths.get("agent-jar-with-dependencies.jar"));
-
-                String path;
-                if (Files.exists(agentPath)) {
-                    path = agentPath.toAbsolutePath().toString();
-                } else if (Files.exists(agentDepPath)) {
-                    path = agentDepPath.toAbsolutePath().toString();
-                } else {
-                    log("请检查当前目录的agent文件");
-                    return;
-                }
-                log("加载Agent: " + path);
-                vm.loadAgent(path, pass);
-                vm.detach();
-                log("加载Agent程序完成");
-
-                if (SocketHelper.check()) {
-                    log("成功目标建立TCP连接");
-                } else {
-                    log("无法与目标建立TCP连接");
-                }
-
-            } catch (Exception ignored) {
-                new Thread(this::analyze).start();
+            if (SocketHelper.check()) {
+                log("成功目标建立TCP连接");
+            } else {
+                log("无法与目标建立TCP连接");
             }
+            new Thread(this::analyze).start();
         });
+
+
         filterList.addMouseListener(new CommonMouse());
         valveList.addMouseListener(new CommonMouse());
         listenerList.addMouseListener(new CommonMouse());
         servletList.addMouseListener(new CommonMouse());
         analyzeButton.addActionListener(e -> new Thread(this::analyze).start());
-        killButton.addActionListener(e -> {
-            String kill = killText.getText();
-
-            ClassObj co = null;
-            for (ClassObj o : coList) {
-                if (o.getClassName().equals(kill)) {
-                    co = o;
-                }
-            }
-
-            if (co == null) {
-                JOptionPane.showMessageDialog(shellPanel, "不存在该类");
-                return;
-            }
-
-            ClassObj finalCo = co;
-
-            if (kill.startsWith("org.springframework")) {
-                int i = JOptionPane.showConfirmDialog(shellPanel, "确定要修改Spring的类？");
-                if (i != 0) {
-                    return;
-                }
-            }
-            if (kill.startsWith("org.apache")) {
-                int i = JOptionPane.showConfirmDialog(shellPanel, "确定要修改Apache的类？");
-                if (i != 0) {
-                    return;
-                }
-            }
-            if (kill.startsWith("java.") || kill.startsWith("javax.") ||
-                    kill.startsWith("sun.") || kill.startsWith("com.sun.")) {
-                int i = JOptionPane.showConfirmDialog(shellPanel, "确定要修改JDK的类？");
-                if (i != 0) {
-                    return;
-                }
-            }
-
-            new Thread(() -> {
-                try {
-                    if (finalCo.getType().equals("FILTER")) {
-                        SocketHelper.killFilter(kill);
-                    }
-                    if (finalCo.getType().equals("SERVLET")) {
-                        SocketHelper.killServlet(kill);
-                    }
-                    if (finalCo.getType().equals("LISTENER")) {
-                        SocketHelper.killListener(kill);
-                    }
-                    if (finalCo.getType().equals("VALVE")) {
-                        SocketHelper.killValve(kill);
-                    }
-                    log("已删除内存马: " + kill);
-                } catch (Exception ex) {
-                    log("无法删除内存马");
-                }
-            }).start();
-        });
         refreshButton.addActionListener(e -> {
-            String pid = pidText.getText();
             String pass = passText.getText();
             if (pass.length() != 8) {
                 JOptionPane.showMessageDialog(shellPanel, "请输入长度为8的密码");
                 return;
             }
             SocketHelper.setPass(pass);
-            try {
-                VirtualMachine vm = VirtualMachine.attach(pid);
-                Path agentPath = Paths.get("lib").resolve(
-                        Paths.get("agent.jar"));
-                Path agentDepPath = Paths.get("lib").resolve(
-                        Paths.get("agent-jar-with-dependencies.jar"));
-
-                String path;
-                if (Files.exists(agentPath)) {
-                    path = agentPath.toAbsolutePath().toString();
-                } else if (Files.exists(agentDepPath)) {
-                    path = agentDepPath.toAbsolutePath().toString();
-                } else {
-                    log("请检查当前目录的agent文件");
-                    return;
-                }
-                vm.loadAgent(path, pass);
-                vm.detach();
-                new Thread(this::analyze).start();
-                log("已刷新");
-            } catch (Exception ignored) {
-                new Thread(this::analyze).start();
-            }
         });
     }
 
     public void core(MouseEvent evt, JList<?> list) {
-
         String pass = passText.getText();
         if (pass.length() != 8) {
             JOptionPane.showMessageDialog(shellPanel, "请输入密码");
@@ -577,7 +386,7 @@ public class ShellForm {
                     if (total.trim().isEmpty()) {
                         total = tips;
                     } else {
-                        total = "// FernFlower \n" + total;
+                        total = "// FernFlower by Jar Analyzer V2\n" + total;
                     }
                 } catch (Exception ignored) {
                     total = tips;
@@ -599,38 +408,19 @@ public class ShellForm {
     }
 
     public static void start0() {
-        // check windows
-        // 目前该功能仅给 Windows 使用
-//        if (!OSUtil.isWindows() || !Version.isJava8()) {
-//            JOptionPane.showMessageDialog(MainForm.getInstance().getMasterPanel(),
-//                    "<html>" +
-//                            "only support jdk8/windows<br>" +
-//                            "目前只支持 jdk8/windows 系统<br>" +
-//                            "更多信息参考原始项目地址：<br>" +
-//                            "https://github.com/4ra1n/shell-analyzer" +
-//                            "</html>");
-//            return;
-//        }
-
-//        // 检查端口 10033 端口是否被占用
-//        if (SocketUtil.isPortInUse("localhost", 10033)) {
-//            JOptionPane.showMessageDialog(MainForm.getInstance().getMasterPanel(),
-//                    "<html>" +
-//                            "10033 port in use<br>" +
-//                            "10033 端口被占用<br>" +
-//                            "该功能需要使用该端口" +
-//                            "</html>");
-//            return;
-//        }
-
         JFrame frame = new JFrame("tomcat-analyzer by 4ra1n");
         instance = new ShellForm();
+
+        instance.passText.setText(DEFAULT_PASSWD);
+        instance.targetIPText.setText("127.0.0.1");
+        instance.targetPortText.setText("10033");
+
         frame.setContentPane(instance.shellPanel);
         frame.setLocationRelativeTo(MainForm.getInstance().getMasterPanel());
         frame.pack();
 
         frame.setResizable(false);
-        frame.setSize(1300, 800);
+        frame.setSize(1400, 800);
 
         frame.setVisible(true);
     }
@@ -656,45 +446,40 @@ public class ShellForm {
         rootPanel.setLayout(new GridLayoutManager(2, 7, new Insets(0, 0, 0, 0), -1, -1));
         shellPanel.add(rootPanel, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         topPanel = new JPanel();
-        topPanel.setLayout(new GridLayoutManager(3, 4, new Insets(0, 0, 0, 0), -1, -1));
+        topPanel.setLayout(new GridLayoutManager(3, 5, new Insets(0, 0, 0, 0), -1, -1));
         topPanel.setEnabled(false);
         rootPanel.add(topPanel, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
-        topPanel.setBorder(BorderFactory.createTitledBorder(null, "启动", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
-        runningButton = new JButton();
-        runningButton.setText("检测当前运行的Java进程");
-        topPanel.add(runningButton, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        processScroll = new JScrollPane();
-        processScroll.setBackground(new Color(-12895429));
-        processScroll.setHorizontalScrollBarPolicy(30);
-        processScroll.setVerticalScrollBarPolicy(20);
-        topPanel.add(processScroll, new GridConstraints(2, 0, 1, 4, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
-        processTable = new JTable();
-        processTable.setAutoCreateRowSorter(false);
-        processTable.setFillsViewportHeight(false);
-        processScroll.setViewportView(processTable);
-        pidText = new JTextField();
-        topPanel.add(pidText, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        topPanel.setBorder(BorderFactory.createTitledBorder(null, "START", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
         attachButton = new JButton();
-        attachButton.setText("开始Attach");
-        topPanel.add(attachButton, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        pidLabel = new JLabel();
-        pidLabel.setText("PID");
-        topPanel.add(pidLabel, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        attachButton.setText("CONNECT");
+        topPanel.add(attachButton, new GridConstraints(0, 4, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         final JPanel panel1 = new JPanel();
         panel1.setLayout(new GridLayoutManager(1, 3, new Insets(0, 0, 0, 0), -1, -1));
-        topPanel.add(panel1, new GridConstraints(1, 0, 1, 4, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
+        topPanel.add(panel1, new GridConstraints(1, 0, 1, 5, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         passLabel = new JLabel();
-        passLabel.setText(" 长度为8的Token");
+        passLabel.setText("TOKEN");
         panel1.add(passLabel, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        genButton = new JButton();
+        genButton.setText("GENERATE CMD");
+        panel1.add(genButton, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         passText = new JTextField();
         panel1.add(passText, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
-        genButton = new JButton();
-        genButton.setText("自动生成");
-        panel1.add(genButton, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        targetIPLabel = new JLabel();
+        targetIPLabel.setText("TARGET IP");
+        topPanel.add(targetIPLabel, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        targetIPText = new JTextField();
+        topPanel.add(targetIPText, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
+        targetPortLabel = new JLabel();
+        targetPortLabel.setText("PORT");
+        topPanel.add(targetPortLabel, new GridConstraints(0, 2, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        targetPortText = new JTextField();
+        topPanel.add(targetPortText, new GridConstraints(0, 3, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
+        final Spacer spacer1 = new Spacer();
+        topPanel.add(spacer1, new GridConstraints(2, 0, 1, 5, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_VERTICAL, 1, GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
         normalPanel = new JPanel();
         normalPanel.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
         rootPanel.add(normalPanel, new GridConstraints(0, 1, 1, 5, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(450, -1), null, new Dimension(450, -1), 0, false));
-        normalPanel.setBorder(BorderFactory.createTitledBorder(null, "组件", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
+        normalPanel.setBorder(BorderFactory.createTitledBorder(null, "COMPONENTS", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
         tabbedPane = new JTabbedPane();
         normalPanel.add(tabbedPane, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 1, false));
         filtersPane = new JPanel();
@@ -732,11 +517,11 @@ public class ShellForm {
         codePanel = new JPanel();
         codePanel.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
         rootPanel.add(codePanel, new GridConstraints(1, 1, 1, 6, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(500, 400), null, null, 0, false));
-        codePanel.setBorder(BorderFactory.createTitledBorder(null, "反编译代码", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
+        codePanel.setBorder(BorderFactory.createTitledBorder(null, "DECOMPILE CODE", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
         logPanel = new JPanel();
         logPanel.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
         rootPanel.add(logPanel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(400, -1), null, null, 0, false));
-        logPanel.setBorder(BorderFactory.createTitledBorder(null, "日志", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
+        logPanel.setBorder(BorderFactory.createTitledBorder(null, "LOG", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
         logScroll = new JScrollPane();
         logPanel.add(logScroll, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
         logArea = new JTextArea();
@@ -749,7 +534,7 @@ public class ShellForm {
         confPane = new JPanel();
         confPane.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
         rootPanel.add(confPane, new GridConstraints(0, 6, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, new Dimension(350, -1), 0, false));
-        confPane.setBorder(BorderFactory.createTitledBorder(null, "配置", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
+        confPane.setBorder(BorderFactory.createTitledBorder(null, "CONFIG", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
         confPanel = new JPanel();
         confPanel.setLayout(new GridLayoutManager(5, 1, new Insets(0, 0, 0, 0), -1, -1));
         confPane.add(confPanel, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
@@ -766,16 +551,11 @@ public class ShellForm {
         blackTip.setText("每行一个（只显示包含黑名单字符串的类）");
         blackPanel.add(blackTip, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         analyzePanel = new JPanel();
-        analyzePanel.setLayout(new GridLayoutManager(4, 3, new Insets(0, 0, 0, 0), -1, -1));
+        analyzePanel.setLayout(new GridLayoutManager(3, 3, new Insets(0, 0, 0, 0), -1, -1));
         confPanel.add(analyzePanel, new GridConstraints(4, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
-        killButton = new JButton();
-        killButton.setText("删除内存马");
-        analyzePanel.add(killButton, new GridConstraints(3, 1, 1, 2, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        killText = new JTextField();
-        analyzePanel.add(killText, new GridConstraints(2, 0, 1, 3, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
         refreshButton = new JButton();
         refreshButton.setText("刷新");
-        analyzePanel.add(refreshButton, new GridConstraints(3, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        analyzePanel.add(refreshButton, new GridConstraints(2, 0, 1, 3, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         analyzeButton = new JButton();
         analyzeButton.setText("开始分析");
         analyzePanel.add(analyzeButton, new GridConstraints(0, 0, 2, 3, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
