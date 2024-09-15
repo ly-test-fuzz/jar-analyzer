@@ -26,14 +26,18 @@ package me.n1ar4.jar.analyzer.gui;
 
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
+import me.n1ar4.jar.analyzer.utils.OSUtil;
 
 import javax.swing.*;
 import javax.swing.plaf.FontUIResource;
 import javax.swing.text.StyleContext;
 import java.awt.*;
+import java.text.MessageFormat;
 import java.util.Locale;
 
 public class ChangeLogForm {
+    public static final String HTML_TEMPLATE = "<html><head><meta charset=\"UTF-8\"></head>" +
+            "<body style='font-family:SimSun;'>{0}</body></html>";
     private JPanel masterPanel;
     private JScrollPane scroll;
     private JEditorPane text;
@@ -43,13 +47,19 @@ public class ChangeLogForm {
         ChangeLogForm instance = new ChangeLogForm();
 
         instance.text.setContentType("text/html");
+        if (OSUtil.isMac()) {
+            code = MessageFormat.format(HTML_TEMPLATE, code);
+        }
         instance.text.setText(code);
         instance.text.setCaretPosition(0);
 
         frame.setContentPane(instance.masterPanel);
         frame.setResizable(false);
-        frame.setLocationRelativeTo(MainForm.getInstance().getMasterPanel());
+
         frame.pack();
+
+        frame.setLocationRelativeTo(MainForm.getInstance().getMasterPanel());
+
         frame.setVisible(true);
     }
 
