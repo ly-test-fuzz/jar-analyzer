@@ -24,10 +24,13 @@
 
 package me.n1ar4.shell.analyzer.start;
 
+import com.n1ar4.agent.dto.ResultReturn;
+import com.n1ar4.agent.dto.SourceResult;
 import me.n1ar4.log.LogManager;
 import me.n1ar4.log.Logger;
-import com.n1ar4.agent.sourceResult.SourceResult;
+import me.n1ar4.shell.analyzer.utils.Base64Util;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
@@ -37,7 +40,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-@SuppressWarnings("all")
+
 public class SocketHelper {
     private static final Logger logger = LogManager.getLogger();
     private static String host;
@@ -58,7 +61,8 @@ public class SocketHelper {
 
     public static boolean check() {
         try {
-            new Socket(host, port);
+            Socket s = new Socket(host, port);
+            s.close();
             return true;
         } catch (Exception ex) {
             logger.error("socket check error: {}", ex.toString());
@@ -67,117 +71,51 @@ public class SocketHelper {
     }
 
     public static void getBytecode(String className) throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject(pass + "|" + className);
-        client.getOutputStream().write(bao.toByteArray());
-        ObjectInputStream ois = new ObjectInputStream(client.getInputStream());
-        byte[] data = (byte[]) ois.readObject();
-        Files.write(Paths.get("test.class"), data);
+        ObjectInputStream ois;
+        try (Socket client = new Socket(host, port)) {
+            ByteArrayOutputStream bao = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(bao);
+            oos.writeObject(pass + "|" + className);
+            client.getOutputStream().write(bao.toByteArray());
+            ois = new ObjectInputStream(client.getInputStream());
+            byte[] data = (byte[]) ois.readObject();
+            Files.write(Paths.get("test.class"), data);
+        }
     }
 
-    public static void killFilter(String kill) throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<KILL-FILTER>" + pass + "|" + kill);
-        client.getOutputStream().write(bao.toByteArray());
-    }
-
-    public static void killServlet(String kill) throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<KILL-SERVLET>" + pass + "|" + kill);
-        client.getOutputStream().write(bao.toByteArray());
-    }
-
-    public static void killListener(String kill) throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<KILL-LISTENER>" + pass + "|" + kill);
-        client.getOutputStream().write(bao.toByteArray());
-    }
-
-    public static void killValve(String kill) throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<KILL-VALVE>" + pass + "|" + kill);
-        client.getOutputStream().write(bao.toByteArray());
-    }
-
-    public static List<String> getAllClasses() throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<ALL>" + pass);
-        client.getOutputStream().write(bao.toByteArray());
-
-        ObjectInputStream ois = new ObjectInputStream(client.getInputStream());
-        ArrayList<String> arrayList = (ArrayList<String>) ois.readObject();
-        return arrayList;
-    }
-
-    public static List<String> getAllServlets() throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<SERVLETS>" + pass);
-        client.getOutputStream().write(bao.toByteArray());
-
-        ObjectInputStream ois = new ObjectInputStream(client.getInputStream());
-        ArrayList<String> arrayList = (ArrayList<String>) ois.readObject();
-        return arrayList;
-    }
-
-    public static List<String> getAllFilters() throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<FILTERS>" + pass);
-        client.getOutputStream().write(bao.toByteArray());
-
-        ObjectInputStream ois = new ObjectInputStream(client.getInputStream());
-        ArrayList<String> arrayList = (ArrayList<String>) ois.readObject();
-        return arrayList;
-    }
-
-    public static List<String> getAllListeners() throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<LISTENERS>" + pass);
-        client.getOutputStream().write(bao.toByteArray());
-
-        ObjectInputStream ois = new ObjectInputStream(client.getInputStream());
-        ArrayList<String> arrayList = (ArrayList<String>) ois.readObject();
-        return arrayList;
-    }
-
+    @SuppressWarnings("unchecked")
     public static List<String> getAllValves() throws Exception {
-        Socket client = new Socket(host, port);
-        ByteArrayOutputStream bao = new ByteArrayOutputStream();
-        ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<VALVES>" + pass);
-        client.getOutputStream().write(bao.toByteArray());
-
-        ObjectInputStream ois = new ObjectInputStream(client.getInputStream());
-        ArrayList<String> arrayList = (ArrayList<String>) ois.readObject();
-        return arrayList;
+        ObjectInputStream ois;
+        try (Socket client = new Socket(host, port)) {
+            ByteArrayOutputStream bao = new ByteArrayOutputStream();
+            ObjectOutputStream oos = new ObjectOutputStream(bao);
+            oos.writeObject("<VALVES>" + pass);
+            client.getOutputStream().write(bao.toByteArray());
+            ois = new ObjectInputStream(client.getInputStream());
+            return (ArrayList<String>) ois.readObject();
+        }
     }
 
-    public static List<SourceResult> getSourceResults() throws Exception{
+    @SuppressWarnings("unchecked")
+    public static ArrayList<SourceResult> getSourceResults() throws Exception {
         Socket client = new Socket(host, port);
         ByteArrayOutputStream bao = new ByteArrayOutputStream();
         ObjectOutputStream oos = new ObjectOutputStream(bao);
-        oos.writeObject("<GETALL>" + pass);
+        oos.writeObject("<GET-ALL>" + pass);
         client.getOutputStream().write(bao.toByteArray());
-
         ObjectInputStream ois = new ObjectInputStream(client.getInputStream());
-        ArrayList<SourceResult> arrayList = (ArrayList<SourceResult>) ois.readObject();
-        return arrayList;
+        ResultReturn resultReturn = (ResultReturn) ois.readObject();
+        if (!resultReturn.ConsoleOutput.isEmpty()) {
+            logger.error("remote error stack trace : " + resultReturn.ConsoleOutput);
+        }
+        if (!resultReturn.objectString.isEmpty()) {
+            byte[] objBytes = Base64Util.decode(resultReturn.objectString);
+            ObjectInputStream objectInputStream = new ObjectInputStream(new ByteArrayInputStream(objBytes));
+            ArrayList<SourceResult> sourceResults = (ArrayList<SourceResult>) objectInputStream.readObject();
+            objectInputStream.close();
+            return sourceResults;
+        } else {
+            return new ArrayList<>();
+        }
     }
 }

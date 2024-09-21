@@ -22,30 +22,31 @@
  * SOFTWARE.
  */
 
-package me.n1ar4.shell.analyzer.model;
+package com.n1ar4.agent.service.tomcat.info;
 
-public class ProcessObj {
-    private String id;
-    private String name;
+import com.n1ar4.agent.dto.UrlInfo;
 
-    public String getId() {
-        return id;
+import java.util.ArrayList;
+
+@SuppressWarnings("unused")
+public class ServiceInfo {
+    public ArrayList<UrlInfo> connectorList;
+    public String defaultHost;
+
+    public ServiceInfo() {
+        this(new ArrayList<>(), "");
     }
 
-    public void setId(String id) {
-        this.id = id;
+    public ServiceInfo(ArrayList<UrlInfo> connectorList) {
+        this(connectorList, "");
     }
 
-    public String getName() {
-        return name;
+    public ServiceInfo(ArrayList<UrlInfo> connectorList, String defaultHost) {
+        this.connectorList = connectorList;
+        this.defaultHost = defaultHost;
     }
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public String toString() {
-        return id + name;
+    public ArrayList<UrlInfo> getConnectorList() {
+        return connectorList;
     }
 }

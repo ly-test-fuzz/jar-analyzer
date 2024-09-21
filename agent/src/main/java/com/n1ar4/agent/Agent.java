@@ -26,7 +26,6 @@ package com.n1ar4.agent;
 
 import arthas.VmTool;
 import com.n1ar4.agent.core.Task;
-import com.n1ar4.agent.vmtools.VmToolUtils;
 
 import java.lang.instrument.Instrumentation;
 import java.net.ServerSocket;
@@ -40,6 +39,10 @@ public class Agent {
     public static Class<?>[] staticClasses;
     private static final String DEFAULT_PASSWD = "12345678";
     private static final int DEFAULT_PORT = 10033;
+
+    public static void refreshClass() {
+        staticClasses = (Class<?>[]) staticIns.getAllLoadedClasses();
+    }
 
     /**
      * 动态的 Agent 方式
@@ -84,14 +87,13 @@ public class Agent {
         System.out.println("##########################################################");
         VmTool vmToolInstances = getVmToolInstances();
         if (vmToolInstances == null) {
-            System.out.println("Load VmTool lib error : " + VmToolUtils.detectLibName());
+            System.out.println("[-] LOAD ERROR");
             return;
         }
 
         int finalPort = port;
         new Thread(() -> {
             try {
-
                 ServerSocket s = null;
                 try {
                     s = new ServerSocket(finalPort);
@@ -106,7 +108,7 @@ public class Agent {
                 while (true) {
                     Socket socket = ss.accept();
                     staticClasses = (Class<?>[]) ins.getAllLoadedClasses();
-                    new Thread(new Task(socket , vmToolInstances , ins)).start();
+                    new Thread(new Task(socket, vmToolInstances, ins)).start();
                 }
             } catch (Exception ex) {
                 ex.printStackTrace();

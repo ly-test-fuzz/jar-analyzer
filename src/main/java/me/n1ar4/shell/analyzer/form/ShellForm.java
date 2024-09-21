@@ -26,16 +26,20 @@ package me.n1ar4.shell.analyzer.form;
 
 import com.intellij.uiDesigner.core.GridConstraints;
 import com.intellij.uiDesigner.core.GridLayoutManager;
+import com.n1ar4.agent.dto.SourceResult;
+import com.n1ar4.agent.dto.UrlInfo;
+import com.n1ar4.agent.dto.UrlInfoAndDescMapValue;
 import me.n1ar4.jar.analyzer.gui.MainForm;
 import me.n1ar4.jar.analyzer.gui.util.ProcessDialog;
 import me.n1ar4.shell.analyzer.model.ClassObj;
-import com.n1ar4.agent.sourceResult.SourceResult;
+import me.n1ar4.shell.analyzer.model.InfoObj;
 import me.n1ar4.shell.analyzer.start.SocketHelper;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.jetbrains.java.decompiler.main.decompiler.ConsoleDecompiler;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.TitledBorder;
 import javax.swing.plaf.FontUIResource;
@@ -43,13 +47,14 @@ import javax.swing.text.StyleContext;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 public class ShellForm {
     private static final String DEFAULT_PASSWD = "P4sSW0rD";
@@ -63,6 +68,15 @@ public class ShellForm {
         }
     }
 
+    class UrlInfoMouse extends MouseAdapter {
+        public void mouseClicked(MouseEvent evt) {
+            JList<?> list = (JList<?>) evt.getSource();
+            if (evt.getClickCount() == 2) {
+                doUrlInfo(evt, list);
+            }
+        }
+    }
+
     public static ShellForm instance;
     private JPanel shellPanel;
     private JPanel rootPanel;
@@ -72,20 +86,10 @@ public class ShellForm {
     private JList<ClassObj> listenerList;
     private JTabbedPane tabbedPane;
     private JPanel normalPanel;
-    private JCheckBox ignoreApacheBox;
-    private JTextArea blackArea;
-    private JCheckBox ignoreJavaBox;
-    private JButton analyzeButton;
     private JPanel filtersPane;
     private JPanel servletsPane;
     private JPanel listenerPane;
     private JPanel valvePane;
-    private JPanel confPane;
-    private JPanel confPanel;
-    private JPanel blackPanel;
-    private JScrollPane blackScroll;
-    private JPanel analyzePanel;
-    private JPanel checkPanel;
     private JPanel codePanel;
     private JPanel logPanel;
     private JScrollPane logScroll;
@@ -96,9 +100,6 @@ public class ShellForm {
     private JScrollPane listenerScroll;
     private JScrollPane valveScroll;
     private JList<ClassObj> valveList;
-    private JCheckBox ignoreSpringBox;
-    private JLabel blackTip;
-    private JButton refreshButton;
     private JTextField passText;
     private JLabel passLabel;
     private JButton genButton;
@@ -108,7 +109,17 @@ public class ShellForm {
     private JLabel targetPortLabel;
     private JTextArea cmdArea;
     private JPanel initPanel;
-    private static final List<String> black = new ArrayList<>();
+    private JTextField scNameText;
+    private JPanel infoPanel;
+    private JLabel urlLabel;
+    private JTextField scText;
+    private JLabel scLabel;
+    private JScrollPane urlScroll;
+    private JList<InfoObj> urlList;
+
+    private static final DefaultListModel<InfoObj> infoModel = new DefaultListModel<>();
+
+    private static final Map<String, List<SourceResult>> staticMap = new HashMap<>();
 
     private void analyze() {
         DefaultListModel<ClassObj> filtersModel = new DefaultListModel<>();
@@ -116,202 +127,62 @@ public class ShellForm {
         DefaultListModel<ClassObj> servletsModel = new DefaultListModel<>();
         DefaultListModel<ClassObj> valvesModel = new DefaultListModel<>();
 
-        boolean igApache = ignoreApacheBox.isSelected();
-        boolean igJava = ignoreJavaBox.isSelected();
-        boolean igSpring = ignoreSpringBox.isSelected();
-
-        String b = blackArea.getText();
-
-        String[] t = b.split("\n");
-        for (String s : t) {
-            s = s.trim();
-            if (s.endsWith("\r")) {
-                s = s.substring(0, s.length() - 1);
-            }
-            black.add(s);
-        }
-
         try {
             List<SourceResult> sourceResults = SocketHelper.getSourceResults();
             for (SourceResult sourceResult : sourceResults) {
-                if(sourceResult.getSourceClass() == "null")
+                if (sourceResult.getSourceClass().equals("null")) {
                     continue;
-                ClassObj co = null;
-                switch (sourceResult.type){
+                }
+                ClassObj co;
+                switch (sourceResult.type) {
                     case TomcatFilter:
                         co = new ClassObj(sourceResult.getSourceClass(), "FILTER");
-                        filtersModel.addElement(co);
+                        if (!filtersModel.contains(co)) {
+                            filtersModel.addElement(co);
+                        }
                         break;
                     case TomcatServlet:
                         co = new ClassObj(sourceResult.getSourceClass(), "SERVLET");
-                        servletsModel.addElement(co);
+                        if (!servletsModel.contains(co)) {
+                            servletsModel.addElement(co);
+                        }
                         break;
                     case TomcatListener:
                         co = new ClassObj(sourceResult.getSourceClass(), "LISTENER");
-                        listenersModel.addElement(co);
+                        if (!listenersModel.contains(co)) {
+                            listenersModel.addElement(co);
+                        }
                         break;
                 }
-                System.out.println(sourceResult.toString());
+                // ADD TO MAP
+                if (staticMap.get(sourceResult.getSourceClass()) == null) {
+                    List<SourceResult> list = new ArrayList<>();
+                    list.add(sourceResult);
+                    staticMap.put(sourceResult.getSourceClass(), list);
+                } else {
+                    staticMap.get(sourceResult.getSourceClass()).add(sourceResult);
+                }
+                System.out.println(sourceResult);
             }
-
             filterList.setModel(filtersModel);
             servletList.setModel(servletsModel);
             listenerList.setModel(listenersModel);
         } catch (Exception ex) {
-            log("无法获得信息");
+            log("无法获得信息: " + ex.getMessage());
         }
-//
-//        try {
-//            List<String> filters = SocketHelper.getAllFilters();
-//            for (String filter : filters) {
-//                if (igApache && filter.startsWith("org.apache")) {
-//                    continue;
-//                }
-//                if (igSpring && filter.startsWith("org.springframework")) {
-//                    continue;
-//                }
-//                if (igJava) {
-//                    if (filter.startsWith("java.")) {
-//                        continue;
-//                    }
-//                    if (filter.startsWith("javax.")) {
-//                        continue;
-//                    }
-//                    if (filter.startsWith("sun.")) {
-//                        continue;
-//                    }
-//                }
-//                boolean blackF = false;
-//                for (String s : black) {
-//                    if (filter.contains(s)) {
-//                        blackF = true;
-//                        break;
-//                    }
-//                }
-//                if (!blackF) {
-//                    continue;
-//                }
-//                ClassObj co = new ClassObj(filter, "FILTER");
-//                filtersModel.addElement(co);
-//            }
-//            filterList.setModel(filtersModel);
-//        } catch (Exception ex) {
-//            log("无法获得信息");
-//        }
-//
-//        try {
-//            List<String> servlets = SocketHelper.getAllServlets();
-//            for (String servlet : servlets) {
-//                if (igApache && servlet.startsWith("org.apache")) {
-//                    continue;
-//                }
-//                if (igSpring && servlet.startsWith("org.springframework")) {
-//                    continue;
-//                }
-//                if (igJava) {
-//                    if (servlet.startsWith("java.")) {
-//                        continue;
-//                    }
-//                    if (servlet.startsWith("javax.")) {
-//                        continue;
-//                    }
-//                    if (servlet.startsWith("sun.")) {
-//                        continue;
-//                    }
-//                }
-//                boolean blackF = false;
-//                for (String s : black) {
-//                    if (servlet.contains(s)) {
-//                        blackF = true;
-//                        break;
-//                    }
-//                }
-//                if (!blackF) {
-//                    continue;
-//                }
-//                ClassObj co = new ClassObj(servlet, "SERVLET");
-//                servletsModel.addElement(co);
-//            }
-//            servletList.setModel(servletsModel);
-//        } catch (Exception ex) {
-//            log("无法获得信息");
-//        }
-//
-//        try {
-//            List<String> listeners = SocketHelper.getAllListeners();
-//            for (String li : listeners) {
-//                if (igApache && li.startsWith("org.apache")) {
-//                    continue;
-//                }
-//                if (igSpring && li.startsWith("org.springframework")) {
-//                    continue;
-//                }
-//                if (igJava) {
-//                    if (li.startsWith("java.")) {
-//                        continue;
-//                    }
-//                    if (li.startsWith("javax.")) {
-//                        continue;
-//                    }
-//                    if (li.startsWith("sun.")) {
-//                        continue;
-//                    }
-//                }
-//                boolean blackF = false;
-//                for (String s : black) {
-//                    if (li.contains(s)) {
-//                        blackF = true;
-//                        break;
-//                    }
-//                }
-//                if (!blackF) {
-//                    continue;
-//                }
-//                ClassObj co = new ClassObj(li, "LISTENER");
-//                listenersModel.addElement(co);
-//            }
-//            listenerList.setModel(listenersModel);
-//        } catch (Exception ex) {
-//            log("无法获得信息");
-//        }
 
         try {
             List<String> valves = SocketHelper.getAllValves();
             for (String v : valves) {
-                if (igApache && v.startsWith("org.apache")) {
-                    continue;
-                }
-                if (igSpring && v.startsWith("org.springframework")) {
-                    continue;
-                }
-                if (igJava) {
-                    if (v.startsWith("java.")) {
-                        continue;
-                    }
-                    if (v.startsWith("javax.")) {
-                        continue;
-                    }
-                    if (v.startsWith("sun.")) {
-                        continue;
-                    }
-                }
-                boolean blackF = false;
-                for (String s : black) {
-                    if (v.contains(s)) {
-                        blackF = true;
-                        break;
-                    }
-                }
-                if (!blackF) {
-                    continue;
-                }
                 ClassObj co = new ClassObj(v, "VALVE");
                 valvesModel.addElement(co);
             }
             valveList.setModel(valvesModel);
         } catch (Exception ex) {
-            log("无法获得信息");
+            log("无法获得信息: " + ex.getMessage());
         }
+
+        urlList.setModel(infoModel);
     }
 
     private static RSyntaxTextArea codeArea;
@@ -330,10 +201,24 @@ public class ShellForm {
 
             String output = "1. 远程启动你的 JAVA 程序\n" +
                     "请在你的启动参数中添加 " + command + "\n" +
+                    "对于 Tomcat 来说通常是修改 startup.bat/startup.sh 部分代码\n" +
                     "2. 配置 IP 和 PASSWORD 信息后点击 CONNECT\n" +
-                    "3. 如果没有自动显示信息可以尝试点击右侧的 刷新 按钮";
+                    "3. 如果没有自动显示信息可以尝试点击右侧的 刷新 按钮\n" +
+                    "注意：在 Tomcat 中修改的是 catalina.bat/sh 参考弹出图片";
 
             cmdArea.setText(output);
+
+            InputStream tomcatIs = ShellForm.class.getClassLoader().getResourceAsStream("img/tomcat.png");
+            try {
+                BufferedImage image = ImageIO.read(tomcatIs);
+                JFrame frame = new JFrame("config");
+                frame.setSize(882, 539);
+                JLabel imageLabel = new JLabel(new ImageIcon(image));
+                frame.add(imageLabel);
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+            } catch (Exception ignored) {
+            }
         });
 
         attachButton.addActionListener(e -> {
@@ -348,6 +233,8 @@ public class ShellForm {
             SocketHelper.setHost(host);
             SocketHelper.setPort(port);
             SocketHelper.setPass(pass);
+
+            staticMap.clear();
 
             ProcessDialog.createProgressDialog(rootPanel);
             JDialog dialog = ProcessDialog.createProgressDialog(MainForm.getInstance().getMasterPanel());
@@ -368,22 +255,26 @@ public class ShellForm {
             }.start();
         });
 
-
         filterList.addMouseListener(new CommonMouse());
         valveList.addMouseListener(new CommonMouse());
         listenerList.addMouseListener(new CommonMouse());
         servletList.addMouseListener(new CommonMouse());
-        analyzeButton.addActionListener(e -> new Thread(this::analyze).start());
-        refreshButton.addActionListener(e -> {
-            String pass = passText.getText();
-            if (pass.length() != 8) {
-                JOptionPane.showMessageDialog(shellPanel, "请输入长度为8的密码");
-                return;
-            }
-            SocketHelper.setPass(pass);
-        });
+        urlList.addMouseListener(new UrlInfoMouse());
     }
 
+    public void doUrlInfo(MouseEvent evt, JList<?> list) {
+        String pass = passText.getText();
+        if (pass.length() != 8) {
+            JOptionPane.showMessageDialog(shellPanel, "请输入密码");
+        }
+        SocketHelper.setPass(pass);
+
+        int index = list.locationToIndex(evt.getPoint());
+        InfoObj res = (InfoObj) list.getModel().getElementAt(index);
+        MessageForm.start0(res);
+    }
+
+    @SuppressWarnings("all")
     public void core(MouseEvent evt, JList<?> list) {
         String pass = passText.getText();
         if (pass.length() != 8) {
@@ -393,14 +284,37 @@ public class ShellForm {
 
         int index = list.locationToIndex(evt.getPoint());
         ClassObj res = (ClassObj) list.getModel().getElementAt(index);
+        infoModel.clear();
+        // 渲染具体信息
+        List<SourceResult> results = staticMap.get(res.getClassName());
+        if (results != null && !results.isEmpty()) {
+            SourceResult sr = results.get(0);
+            scText.setText(sr.getSourceClass());
+            scNameText.setText(sr.getName());
+            HashMap<String, UrlInfoAndDescMapValue> sourceTagMapForUrlInfosAndDesc = sr.getSourceTagMapForUrlInfosAndDesc();
+            for (UrlInfoAndDescMapValue value : sourceTagMapForUrlInfosAndDesc.values()) {
+                for (UrlInfo u : value.urlInfos) {
+                    InfoObj infoObj = new InfoObj();
+                    infoObj.setUrl(u.url);
+                    infoObj.setUrlDesc(u.description);
+                    infoObj.setHash(value.tag);
+                    infoObj.setGlobalDesc(value.desc);
+                    infoModel.addElement(infoObj);
+                }
+            }
+        } else {
+            scText.setText("NONE");
+            scNameText.setText("NONE");
+            infoModel.clear();
+        }
 
-        log("尝试获取字节码进行反编译");
+        log("尝试获取字节码进行反编译: " + res.getClassName());
 
         new Thread(() -> {
             try {
                 SocketHelper.getBytecode(res.getClassName());
             } catch (Exception ex) {
-                log("无法连接目标");
+                log("无法连接目标: " + ex.getMessage());
             }
             String classPath = "test.class";
             String javaDir = ".";
@@ -466,7 +380,7 @@ public class ShellForm {
         frame.setLocationRelativeTo(MainForm.getInstance().getMasterPanel());
 
         frame.setResizable(false);
-        frame.setSize(1400, 800);
+        frame.setSize(1600, 800);
 
         frame.setVisible(true);
     }
@@ -489,7 +403,7 @@ public class ShellForm {
         shellPanel = new JPanel();
         shellPanel.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
         rootPanel = new JPanel();
-        rootPanel.setLayout(new GridLayoutManager(2, 7, new Insets(0, 0, 0, 0), -1, -1));
+        rootPanel.setLayout(new GridLayoutManager(2, 8, new Insets(0, 0, 0, 0), -1, -1));
         shellPanel.add(rootPanel, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
         topPanel = new JPanel();
         topPanel.setLayout(new GridLayoutManager(3, 5, new Insets(0, 0, 0, 0), -1, -1));
@@ -525,7 +439,7 @@ public class ShellForm {
         topPanel.add(cmdArea, new GridConstraints(2, 0, 1, 5, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(150, 50), null, 0, false));
         normalPanel = new JPanel();
         normalPanel.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
-        rootPanel.add(normalPanel, new GridConstraints(0, 1, 1, 5, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(450, -1), null, new Dimension(450, -1), 0, false));
+        rootPanel.add(normalPanel, new GridConstraints(0, 1, 1, 5, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(450, -1), null, null, 0, false));
         normalPanel.setBorder(BorderFactory.createTitledBorder(null, "COMPONENTS", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
         tabbedPane = new JTabbedPane();
         normalPanel.add(tabbedPane, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 1, false));
@@ -563,11 +477,11 @@ public class ShellForm {
         valveScroll.setViewportView(valveList);
         codePanel = new JPanel();
         codePanel.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
-        rootPanel.add(codePanel, new GridConstraints(1, 1, 1, 6, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(500, 400), null, null, 0, false));
+        rootPanel.add(codePanel, new GridConstraints(1, 1, 1, 7, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(500, 400), null, null, 0, false));
         codePanel.setBorder(BorderFactory.createTitledBorder(null, "DECOMPILE CODE", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
         logPanel = new JPanel();
         logPanel.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
-        rootPanel.add(logPanel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(400, -1), null, null, 0, false));
+        rootPanel.add(logPanel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(200, -1), null, null, 0, false));
         logPanel.setBorder(BorderFactory.createTitledBorder(null, "LOG", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
         logScroll = new JScrollPane();
         logPanel.add(logScroll, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
@@ -578,46 +492,26 @@ public class ShellForm {
         if (logAreaFont != null) logArea.setFont(logAreaFont);
         logArea.setForeground(new Color(-16711895));
         logScroll.setViewportView(logArea);
-        confPane = new JPanel();
-        confPane.setLayout(new GridLayoutManager(1, 1, new Insets(0, 0, 0, 0), -1, -1));
-        rootPanel.add(confPane, new GridConstraints(0, 6, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, new Dimension(350, -1), 0, false));
-        confPane.setBorder(BorderFactory.createTitledBorder(null, "CONFIG", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
-        confPanel = new JPanel();
-        confPanel.setLayout(new GridLayoutManager(5, 1, new Insets(0, 0, 0, 0), -1, -1));
-        confPane.add(confPanel, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
-        blackPanel = new JPanel();
-        blackPanel.setLayout(new GridLayoutManager(2, 1, new Insets(0, 0, 0, 0), -1, -1));
-        confPanel.add(blackPanel, new GridConstraints(1, 0, 3, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, new Dimension(-1, 100), null, null, 0, false));
-        blackPanel.setBorder(BorderFactory.createTitledBorder(null, "自定义黑名单", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
-        blackScroll = new JScrollPane();
-        blackPanel.add(blackScroll, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
-        blackArea = new JTextArea();
-        blackArea.setText("");
-        blackScroll.setViewportView(blackArea);
-        blackTip = new JLabel();
-        blackTip.setText("每行一个（只显示包含黑名单字符串的类）");
-        blackPanel.add(blackTip, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        analyzePanel = new JPanel();
-        analyzePanel.setLayout(new GridLayoutManager(3, 3, new Insets(0, 0, 0, 0), -1, -1));
-        confPanel.add(analyzePanel, new GridConstraints(4, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
-        refreshButton = new JButton();
-        refreshButton.setText("刷新");
-        analyzePanel.add(refreshButton, new GridConstraints(2, 0, 1, 3, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        analyzeButton = new JButton();
-        analyzeButton.setText("开始分析");
-        analyzePanel.add(analyzeButton, new GridConstraints(0, 0, 2, 3, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        checkPanel = new JPanel();
-        checkPanel.setLayout(new GridLayoutManager(3, 1, new Insets(0, 0, 0, 0), -1, -1));
-        confPanel.add(checkPanel, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
-        ignoreApacheBox = new JCheckBox();
-        ignoreApacheBox.setText("忽略org.apache开头的类");
-        checkPanel.add(ignoreApacheBox, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        ignoreJavaBox = new JCheckBox();
-        ignoreJavaBox.setText("忽略java/javax/sun开头的类");
-        checkPanel.add(ignoreJavaBox, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
-        ignoreSpringBox = new JCheckBox();
-        ignoreSpringBox.setText("忽略org.springframework开头的类");
-        checkPanel.add(ignoreSpringBox, new GridConstraints(2, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        infoPanel = new JPanel();
+        infoPanel.setLayout(new GridLayoutManager(4, 2, new Insets(0, 0, 0, 0), -1, -1));
+        rootPanel.add(infoPanel, new GridConstraints(0, 6, 1, 2, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, null, null, null, 0, false));
+        infoPanel.setBorder(BorderFactory.createTitledBorder(null, "INFO", TitledBorder.DEFAULT_JUSTIFICATION, TitledBorder.DEFAULT_POSITION, null, null));
+        urlLabel = new JLabel();
+        urlLabel.setText("SOURCE NAME");
+        infoPanel.add(urlLabel, new GridConstraints(0, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        scNameText = new JTextField();
+        scNameText.setEditable(false);
+        infoPanel.add(scNameText, new GridConstraints(0, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(100, -1), null, 0, false));
+        scLabel = new JLabel();
+        scLabel.setText("SOURCE CLASS");
+        infoPanel.add(scLabel, new GridConstraints(1, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
+        scText = new JTextField();
+        scText.setEditable(false);
+        infoPanel.add(scText, new GridConstraints(1, 1, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
+        urlScroll = new JScrollPane();
+        infoPanel.add(urlScroll, new GridConstraints(2, 0, 2, 2, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
+        urlList = new JList();
+        urlScroll.setViewportView(urlList);
     }
 
     /**

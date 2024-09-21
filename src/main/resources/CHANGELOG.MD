@@ -4,12 +4,16 @@
 
 更新日志：
 
+- [功能] 增强 `tomcat` 分析能力（例如 `URL` 信息）
 - [功能] 代码区域选中部分右键搜索定位 `class` 位置
 - [功能] 代码区域和文件树区域支持在文件管理器中打开
+- [BUG] 修复子类 `this.父类方法` 时找不到 `caller`
 - [BUG] 修复文件树底部搜索区域某些情况下 `UI` 抖动
 - [BUG] 修复致谢页面和更新日志在 `mac` 中乱码
 - [BUG] 修复 `tomcat` 分析卡住的问题
+- [BUG] 修复 `tomcat` 分析找不到某些类的问题
 - [优化] 添加分析 `jar` 时的进度条展示
+- [优化] 分析 `tomcat` 时 `socket` 未关闭问题
 - [优化] 优化 `tomcat` 分析的命令生成
 - [优化] 添加 `tomcat` 分析等待进度条
 - [优化] 优化所有的窗口显示位置居中
@@ -17,16 +21,20 @@
 - [优化] 将安全日志单独输出到日志文件
 - [优化] 允许文件树搜索内容包含空格输入
 - [优化] 给所有没有图标的菜单选项添加默认图标
+- [优化] 优化 `sql` 日志文件按日期保存
+- [优化] 生成命令时显示 `tomcat` 的配置示例
+- [其他] `JRE 22` 版本升级 `JRE 23`
 
 感谢以下用户的贡献:
 
 - 4ra1n (https://github.com/4ra1n)
+- fantasy (https://github.com/ly-test-fuzz)
 - phil (https://github.com/sensensen404)
 
 所有可供下载的文件都由 `Github Actions` 构建，提供以下四种:
 
 - `windows-full` 版内置开启 `G1GC` 的 `JRE 8` 环境 (**完整版本**)
-- `windows-22` 版内置开启 `ZGC` 的 `JRE 22` 环境（仅包含核心功能）
+- `windows-22` 版内置开启 `ZGC` 的 `JRE 23` 环境（仅包含核心功能）
 - `windows-system` 版使用系统 `JRE` 的启动脚本 (推荐安装 `JRE/JDK 8`)
 - `zip` 版仅包含简单的 `jar` 文件 (使用 `java -jar` 启动)
 
